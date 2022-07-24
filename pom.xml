@@ -33,5 +33,12 @@
             <artifactId>maven-jar-plugin</artifactId>
             <version>3.2.0</version>
         </dependency>
+        <!-- https://mvnrepository.com/artifact/org.apache.spark/spark-sql -->
+        <dependency>
+            <groupId>org.apache.spark</groupId>
+            <artifactId>spark-sql_2.12</artifactId>
+            <version>3.2.0</version>
+            <scope>provided</scope>
+        </dependency>
     </dependencies>
 </project>

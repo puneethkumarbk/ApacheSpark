@@ -1,4 +1,4 @@
-package SparkStrucutedStreaming
+package SparkStreaming
 
 import org.apache.log4j.{Level, Logger}
 import org.apache.maven.shared.utils.logging.MessageUtils.level
