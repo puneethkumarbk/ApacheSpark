@@ -1,13 +1,13 @@
 package SparkStrucutedStreaming
 
 import org.apache.log4j.{Level, Logger}
+import org.apache.spark.SparkConf
 import org.apache.spark.sql.SparkSession
 import org.apache.spark.sql.functions.{col, from_json, sum, window}
 import org.apache.spark.sql.streaming.Trigger
-import org.apache.spark.sql.types.{IntegerType, LongType, StringType, StructField, StructType}
+import org.apache.spark.sql.types.{IntegerType, LongType, StringType, StructField, StructType, TimestampType}
 
-
-object EvenTimeExpGroupWindow extends App{
+object waterMarkExample extends App{
   //setting Logging Level
   Logger.getLogger("org").setLevel(Level.ERROR)
 
@@ -16,7 +16,7 @@ object EvenTimeExpGroupWindow extends App{
   val spark = SparkSession
     .builder()
     .master("local[2]")
-    .appName("EvenTimeExpGroupWindow")
+    .appName("waterMarkExample")
     .config("spark.sql.shuffle.partitions", 3)
     .config("spark.streaming.stopGracefullyOnShutdown","true")
     .config("spark.sql.streaming.schemaInference", "true")
@@ -28,7 +28,7 @@ object EvenTimeExpGroupWindow extends App{
     StructField("amount", IntegerType),
     StructField("postal_code", LongType),
     StructField("post_id", LongType),
-    StructField("transaction_dt", StringType)
+    StructField("transuction_dt", TimestampType)
   ))
 
   // Read the data from Socket
@@ -40,28 +40,18 @@ object EvenTimeExpGroupWindow extends App{
 
   //Process
   //ordersDf.printSchema() -- value: string (nullable = true)
-
   val valueDf = ordersDf.select(from_json(col("value"), ordersSchema).alias("value"))
-  //valueDf.printSchema()
 
+  //Selecting the fields inside struct fields to avoid the nesting things
   val refinedOrders = valueDf.select("value.*")
-  /* //refinedOrders.printSchema()
-  root
-  |-- card_id: integer (nullable = true)
-  |-- amount: integer (nullable = true)
-  |-- postal_code: integer (nullable = true)
-  |-- post_id: integer (nullable = true)
-  |-- transaction_dt: string (nullable = true) */
 
-  val windowAggDf = refinedOrders.groupBy(window(col("transaction_dt"), "15 minute"))
+  val windowAggDf = refinedOrders
+    //with water mark takes event time  and duration
+    .withWatermark("transuction_dt", "30 minute")
+    //.groupBy(window(col("transaction_dt"), "15 minute"))
+    .groupBy(window(col("transuction_dt"), "15 minute", "5 minute"))   //sliding window it overlaps
     .agg(sum("amount").alias("Total_invoice"))
 
-  //windowAggDf.printSchema()
-  /* root
- |-- window: struct (nullable = false)
- |    |-- start: timestamp (nullable = true)
- |    |-- end: timestamp (nullable = true)
- |-- Total_invoice: long (nullable = true)*/
 
 
   val outputDf = windowAggDf.select("window.start", "window.end", "Total_invoice")
@@ -70,11 +60,10 @@ object EvenTimeExpGroupWindow extends App{
   val ordersQuery = outputDf.writeStream
     .format("console")
     .outputMode("update")
-    .option("checkpointLocation", "src//resources//checkpoint//EvenTimeExpGroupWindow//")
+    .option("checkpointLocation", "src//resources//checkpoint//waterMarkExample//")
     .trigger(Trigger.ProcessingTime("10 seconds"))
     .start()
 
   //hold the termination until user terminate
   ordersQuery.awaitTermination()
-
 }
